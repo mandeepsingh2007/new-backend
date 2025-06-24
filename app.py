@@ -11,6 +11,9 @@ from ai_agents.yfinance_agent import fetch_stock_data
 from ai_agents.gemini_agent import get_news_summary
 from ai_agents.historical_analysis_agent import historical_stock_analysis
 
+# Import pipeline logic
+from pipeline import run_stock_prediction, analyze_trend
+
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
@@ -67,6 +70,22 @@ def handle_stock():
             except Exception as e:
                 print("❌ Error in historical_analysis_agent:", e)
                 response["historical_analysis_error"] = str(e)
+
+        # Agent: LSTM prediction pipeline (from pipeline.py)
+        if agent in ["all", "lstm"]:
+            try:
+                print("⚙️ Running LSTM prediction pipeline...")
+                model, scaler, df, future_df = run_stock_prediction(symbol)  # Example: RELIANCE.NS
+                if future_df is not None:
+                    response["forecast_data"] = future_df.tail(5).to_dict(orient="records")
+                    response["trend"] = analyze_trend(future_df, "Predicted_Close")
+                    print("✅ LSTM forecast and trend added to response")
+                else:
+                    print("⚠️ LSTM pipeline returned no forecast")
+                    response["forecast_error"] = "LSTM pipeline returned no forecast"
+            except Exception as e:
+                print("❌ Error in LSTM pipeline:", e)
+                response["forecast_error"] = str(e)
 
         print("✅ Response ready to send:", response)
         return jsonify(response), 200
