@@ -9,13 +9,13 @@ CORS(app)
 
 # Add local directories to sys.path for import resolution
 sys.path.append(os.path.join(os.path.dirname(__file__), "ai_agents"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "AI Model"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "AI_Model"))
 
 # Import custom AI agents and prediction pipeline
 from ai_agents.yfinance_agent import fetch_stock_data
 from ai_agents.gemini_agent import get_news_summary
 from ai_agents.historical_analysis_agent import historical_stock_analysis
-from pipeline import run_stock_prediction
+from AI_Model.pipeline import run_stock_prediction
 
 @app.route("/api/stocks", methods=["POST"])
 def handle_stock():
