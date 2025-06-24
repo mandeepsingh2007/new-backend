@@ -3,20 +3,19 @@ import sys
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Add parent directory to the path
-sys.path.append(os.path.dirname(os.path.abspath("D:/Projects/Trade-AI/TradeScribe-AI/ai_agents")))
+# Allow CORS (important for frontend integration)
+app = Flask(__name__)
+CORS(app)
 
-# Import agents
+# Add local directories to sys.path for import resolution
+sys.path.append(os.path.join(os.path.dirname(__file__), "ai_agents"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "AI Model"))
+
+# Import custom AI agents and prediction pipeline
 from ai_agents.yfinance_agent import fetch_stock_data
 from ai_agents.gemini_agent import get_news_summary
 from ai_agents.historical_analysis_agent import historical_stock_analysis
-
-# Import pipeline logic
-from pipeline import run_stock_prediction, analyze_trend
-
-# Initialize Flask app
-app = Flask(__name__)
-CORS(app)
+from pipeline import run_stock_prediction
 
 @app.route("/api/stocks", methods=["POST"])
 def handle_stock():
@@ -24,7 +23,7 @@ def handle_stock():
 
     try:
         data = request.get_json()
-        print("✅ Request JSON parsed:", data)
+        print("✅ Parsed request:", data)
 
         stock = data.get("stock")
         symbol = data.get("symbol")
@@ -33,67 +32,68 @@ def handle_stock():
         timeline = data.get("timeline")
 
         if not stock or not symbol:
-            print("❌ Missing stock or symbol")
             return jsonify({"error": "Missing 'stock' or 'symbol'"}), 400
 
         response = {}
 
-        # Agent: yfinance
+        # --- YFinance Agent ---
         if agent in ["all", "yfinance"]:
             try:
-                print("🔍 Fetching data from yfinance agent...")
+                print("📊 Fetching stock data from yfinance...")
                 df = fetch_stock_data(stock)
-                print("✅ yfinance data fetched successfully")
                 response["stock_data"] = df.tail(5).to_dict(orient="records") if df is not None else []
             except Exception as e:
-                print("❌ Error in yfinance_agent:", e)
+                print("❌ yfinance error:", e)
                 response["stock_data_error"] = str(e)
 
-        # Agent: gemini
+        # --- Gemini Agent ---
         if agent in ["all", "gemini"]:
             try:
-                print("🔍 Fetching news summary from gemini agent...")
+                print("📰 Fetching news summary...")
                 news = get_news_summary(stock, symbol)
-                print("✅ Gemini news summary received")
                 response["news_summary"] = news
             except Exception as e:
-                print("❌ Error in gemini_agent:", e)
+                print("❌ Gemini error:", e)
                 response["news_summary_error"] = str(e)
 
-        # Agent: historical analysis
+        # --- Historical Analysis Agent ---
         if agent in ["all", "historical"]:
             try:
-                print("🔍 Running historical analysis agent...")
+                print("📈 Running historical analysis...")
                 analysis = historical_stock_analysis(symbol)
-                print("✅ Historical analysis completed")
                 response["historical_analysis"] = analysis
             except Exception as e:
-                print("❌ Error in historical_analysis_agent:", e)
+                print("❌ Historical analysis error:", e)
                 response["historical_analysis_error"] = str(e)
 
-        # Agent: LSTM prediction pipeline (from pipeline.py)
+        # --- LSTM Prediction Pipeline ---
         if agent in ["all", "lstm"]:
             try:
-                print("⚙️ Running LSTM prediction pipeline...")
-                model, scaler, df, future_df = run_stock_prediction(symbol)  # Example: RELIANCE.NS
-                if future_df is not None:
-                    response["forecast_data"] = future_df.tail(5).to_dict(orient="records")
-                    response["trend"] = analyze_trend(future_df, "Predicted_Close")
-                    print("✅ LSTM forecast and trend added to response")
+                print("🧠 Running LSTM prediction pipeline...")
+                result = run_stock_prediction(symbol)
+
+                if result:
+                    future_df = result.get("future_df")
+                    trend = result.get("trend_analysis")
+
+                    response["forecast_data"] = future_df.tail(5).to_dict(orient="records") if future_df is not None else []
+                    response["trend"] = trend
+                    print("✅ Forecast and trend added.")
                 else:
-                    print("⚠️ LSTM pipeline returned no forecast")
-                    response["forecast_error"] = "LSTM pipeline returned no forecast"
+                    response["forecast_error"] = "No result returned from prediction pipeline"
             except Exception as e:
-                print("❌ Error in LSTM pipeline:", e)
+                print("❌ LSTM pipeline error:", e)
                 response["forecast_error"] = str(e)
 
-        print("✅ Response ready to send:", response)
+        print("✅ Final response ready.")
         return jsonify(response), 200
 
     except Exception as e:
-        print("❌ General error in /api/stocks:", e)
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        print("❌ Server error:", e)
+        return jsonify({"error": f"Internal Server Error: {str(e)}"}), 500
+
 
 if __name__ == "__main__":
-    print("🚀 Flask app is starting...")
-    app.run(debug=True)
+    print("🚀 Flask app starting...")
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
